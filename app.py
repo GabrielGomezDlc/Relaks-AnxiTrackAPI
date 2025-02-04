@@ -100,4 +100,4 @@ class AnxitrackAccuracy(Resource):
         return {"model": "Anxitrack", "accuracy": f"{ANXITRACK_ACCURACY * 100:.1f}%"}
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=False)
