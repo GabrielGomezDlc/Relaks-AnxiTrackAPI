@@ -1,5 +1,3 @@
-import tensorflow_decision_forests as tfdf
-import tensorflow as tf
 import ydf
 import numpy as np
 from flask import Flask, request, jsonify
@@ -9,11 +7,8 @@ from flask_restx import Api, Resource, fields
 app = Flask(__name__)
 
 # Cargar los modelos
-model_relaks = tf.saved_model.load("relaks_v02")
+model_relaks = ydf.load_model("relaks_v03")
 model_anxitrack = ydf.load_model("anxitrack_v03")
-
-# Obtener las funciones de inferencia de los modelos
-infer_relaks = model_relaks.signatures['serving_default']
 
 api = Api(app, title="Relaks & AnxiTrack API", version="1.0", description="API to predict categories of relaxation techniques and STAI category.")
 
@@ -53,18 +48,19 @@ class RelaksPredict(Resource):
 
         try:
             data = request.get_json()
-            single_data_relaks = {
-                'age': tf.constant([data['age']], dtype=tf.string),
-                'stai_stress_category': tf.constant([data['stai_stress_category']], dtype=tf.int64),
-                'gender': tf.constant([data['gender']], dtype=tf.string),
+            input_data = {
+                "age": [data['age']],
+                "stai_stress_category": [data['stai_stress_category']],
+                "gender": [data['gender']],
             }
-            predictions = infer_relaks(**single_data_relaks)
-            output = predictions['output_1'].numpy()
-            predicted_class = int(tf.argmax(output[0]).numpy())
+            prediction_probabilities = model_relaks.predict(input_data)
+            class_labels = [3, 2, 1]
+            predicted_index = np.argmax(prediction_probabilities, axis=1)[0]
+            predicted_class = class_labels[predicted_index]
             return {"predicted_category": predicted_class}
         except Exception as e:
             return {"error": str(e)}, 500
-
+        
 @anxitrack_ns.route("/predict")
 class AnxitrackPredict(Resource):
     @anxitrack_ns.expect(anxitrack_model)
@@ -91,7 +87,7 @@ class AnxitrackPredict(Resource):
             return {"predicted_stai_category": predicted_class}
         except Exception as e:
             return {"error": str(e)}, 500
-        
+
 
 @relaks_ns.route("/accuracy")
 class RelaksAccuracy(Resource):
@@ -104,4 +100,5 @@ class AnxitrackAccuracy(Resource):
         return {"model": "Anxitrack", "accuracy": f"{ANXITRACK_ACCURACY * 100:.1f}%"}
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))  # Toma el puerto de Railway o usa 5000
+    app.run(host="0.0.0.0", port=port)
